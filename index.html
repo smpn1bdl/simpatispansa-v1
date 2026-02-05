@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIMPATI SPANSA - Sistem Inventaris Sekolah</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- QRCode.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#0f172a', // Slate 900
+                        secondary: '#3b82f6', // Blue 500
+                        accent: '#10b981', // Emerald 500
+                        danger: '#ef4444', // Red 500
+                        background: '#f1f5f9', // Slate 100
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .spinner {
+            border: 2px solid rgba(255,255,255, 0.3);
+            border-radius: 50%;
+            border-top: 2px solid #fff;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+        // --- KONFIGURASI GLOBAL ---
+        const DEFAULT_CLOUD_URL = "https://script.google.com/macros/s/AKfycbxujiAB71kj2D4bACrYPgwcRlmy99mfVS_EvBL-1Vkss82DD-jpMf60Tft2qWDuUBBbkg/exec"; 
+
+        // --- ICONS ---
+        const Icons = {
+            Box: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>,
+            Grid: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>,
+            List: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>,
+            Plus: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>,
+            Trash: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
+            Edit: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>,
+            Search: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
+            Activity: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>,
+            ArrowRight: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>,
+            ArrowLeft: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>,
+            Clipboard: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>,
+            Check: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
+            CheckCircle: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
+            Maximize: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>,
+            Minimize: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg>,
+            Upload: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
+            Download: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+            Settings: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
+            Cloud: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>,
+            CloudOff: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22.61 16.95A5 5 0 0 0 18 10h-1.26a8 8 0 0 0-7.05-6M5 5a8 8 0 0 0 4 15h9a5 5 0 0 0 1.7-.3"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>,
+            User: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>,
+            History: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>,
+            Share: () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>,
+            Eye: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
+            DownloadImage: () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        };
+
+        // --- DUMMY DATA ---
+        const INITIAL_DATA = [
+            { id: 1, code: 'INV-001', name: 'Laptop Acer Aspire', brand: 'Acer', category: 'KIB B', year: '2023', location: 'Lab Komputer 1', quantity: 15, condition: 'Baik', source: 'Dana BOS', date: '2024-01-10', status: 'Tersedia', price: 7500000 },
+            { id: 2, code: 'INV-002', name: 'Proyektor Epson', brand: 'Epson', category: 'KIB B', year: '2022', location: 'Ruang Guru', quantity: 2, condition: 'Baik', source: 'Hibah', date: '2024-01-12', status: 'Dipinjam', price: 5000000 },
+            { id: 3, code: 'INV-003', name: 'Meja Siswa', brand: 'Olympic', category: 'KIR Kelas 7', year: '2021', location: 'Kelas X-A', quantity: 30, condition: 'Rusak Ringan', source: 'Dana Komite', date: '2024-01-15', status: 'Tersedia', price: 450000 },
+            { id: 4, code: 'INV-004', name: 'Mikroskop', brand: 'Yazumi', category: 'KIR Ruang Lain', year: '2023', location: 'Lab IPA', quantity: 10, condition: 'Baik', source: 'Dana BOS', date: '2024-02-01', status: 'Tersedia', price: 1200000 }
+        ];
+
+        // --- COMPONENTS ---
+        const StatCard = ({ title, value, color, subtext, icon: Icon }) => (
+            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md transition-shadow">
+                <div>
+                    <p className="text-slate-500 text-sm font-medium">{title}</p>
+                    <h3 className="text-2xl font-bold text-slate-800 mt-1">{value}</h3>
+                    <p className={`text-xs mt-1 ${color === 'red' ? 'text-red-500' : 'text-slate-400'}`}>{subtext}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${color === 'blue' ? 'bg-blue-100 text-blue-600' : color === 'green' ? 'bg-emerald-100 text-emerald-600' : color === 'red' ? 'bg-red-100 text-red-600' : 'bg-orange-100 text-orange-600'}`}>
+                    <Icon />
+                </div>
+            </div>
+        );
+
+        const Modal = ({ isOpen, onClose, title, children, maxWidth = "max-w-lg" }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+                    <div className={`bg-white rounded-xl shadow-2xl w-full ${maxWidth} max-h-[90vh] overflow-y-auto animate-fade-in`}>
+                        <div className="flex justify-between items-center p-5 border-b sticky top-0 bg-white z-10">
+                            <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-2xl">&times;</button>
+                        </div>
+                        <div className="p-5">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ConditionChart = ({ items }) => {
+            const canvasRef = useRef(null);
+            const chartInstance = useRef(null);
+            useEffect(() => {
+                if (!canvasRef.current) return;
+                const conditions = { 'Baik': 0, 'Rusak Ringan': 0, 'Rusak Berat': 0 };
+                items.forEach(i => {
+                    const c = i.condition || 'Baik'; 
+                    if(conditions[c] !== undefined) conditions[c] += i.quantity;
+                    else conditions[c] = (conditions[c] || 0) + i.quantity;
+                });
+                const ctx = canvasRef.current.getContext('2d');
+                if (chartInstance.current) chartInstance.current.destroy();
+                chartInstance.current = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(conditions),
+                        datasets: [{
+                            data: Object.values(conditions),
+                            backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(245, 158, 11, 0.8)', 'rgba(239, 68, 68, 0.8)'],
+                            borderColor: ['#10b981', '#f59e0b', '#ef4444'],
+                            borderWidth: 1,
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } } } }
+                });
+                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+            }, [items]);
+            return <div className="h-64 relative"><canvas ref={canvasRef}></canvas></div>;
+        };
+
+        const CategoryChart = ({ items }) => {
+            const canvasRef = useRef(null);
+            const chartInstance = useRef(null);
+            useEffect(() => {
+                if (!canvasRef.current) return;
+                const categories = {};
+                items.forEach(i => {
+                    const cat = i.category || 'Lainnya';
+                    categories[cat] = (categories[cat] || 0) + i.quantity;
+                });
+                const labels = Object.keys(categories);
+                const data = Object.values(categories);
+                const ctx = canvasRef.current.getContext('2d');
+                if (chartInstance.current) chartInstance.current.destroy();
+                const bgColors = labels.map((_, i) => `hsla(${210 + (i * 20)}, 90%, 60%, 0.7)`);
+                const borderColors = labels.map((_, i) => `hsla(${210 + (i * 20)}, 90%, 50%, 1)`);
+                chartInstance.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: { labels: labels, datasets: [{ label: 'Jumlah Barang', data: data, backgroundColor: bgColors, borderColor: borderColors, borderWidth: 1, borderRadius: 4, barPercentage: 0.6 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#1e293b', padding: 12, cornerRadius: 8 } }, scales: { y: { beginAtZero: true, grid: { borderDash: [2, 4], color: '#e2e8f0' } }, x: { grid: { display: false } } } }
+                });
+                return () => { if (chartInstance.current) chartInstance.current.destroy(); };
+            }, [items]);
+            return <div className="h-64"><canvas ref={canvasRef}></canvas></div>;
+        };
+
+        const App = () => {
+            // --- STATE ---
+            const [view, setView] = useState('dashboard');
+            const [isFullScreen, setIsFullScreen] = useState(false);
+            const [isSimulatedFull, setIsSimulatedFull] = useState(false);
+            const [userRole, setUserRole] = useState('user');
+            const [cloudUrl, setCloudUrl] = useState(() => DEFAULT_CLOUD_URL || localStorage.getItem('simpati_cloud_url') || '');
+            const [cloudStatus, setCloudStatus] = useState('idle');
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+            const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+            const [itemToDelete, setItemToDelete] = useState(null);
+            const [viewItem, setViewItem] = useState(null);
+            const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+            const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+            const [shareData, setShareData] = useState({ url: '', name: '' });
+            const [qrCodeUrl, setQrCodeUrl] = useState('');
+            const [items, setItems] = useState(() => { const saved = localStorage.getItem('simpati_items'); return saved ? JSON.parse(saved) : INITIAL_DATA; });
+            const [logs, setLogs] = useState([]);
+            const [borrowHistory, setBorrowHistory] = useState([]);
+            const [isItemModalOpen, setIsItemModalOpen] = useState(false);
+            const [isBorrowModalOpen, setIsBorrowModalOpen] = useState(false);
+            const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [selectedItemForBorrow, setSelectedItemForBorrow] = useState(null);
+            const [bulkPreviewData, setBulkPreviewData] = useState([]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterCategory, setFilterCategory] = useState('All');
+            const [currentPage, setCurrentPage] = useState(1);
+            const [itemsPerPage, setItemsPerPage] = useState(10);
+            const [selectedItems, setSelectedItems] = useState([]);
+            const [isBulkDelete, setIsBulkDelete] = useState(false);
+
+            // --- LOGIC ---
+            const formatRupiah = (number) => { if (!number) return '-'; return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(number); };
+            const toggleRole = () => { if (userRole === 'user') { setIsLoginModalOpen(true); } else { setUserRole('user'); } };
+            const handleLogin = (e) => { e.preventDefault(); const password = e.target.password.value; if (password === 'rahasia') { setUserRole('admin'); setIsLoginModalOpen(false); } else { alert("Password Salah!"); e.target.password.value = ''; } };
+            
+            useEffect(() => {
+                const params = new URLSearchParams(window.location.search);
+                const sharedId = params.get('id');
+                if (sharedId && items.length > 0) {
+                    const found = items.find(i => String(i.id) === String(sharedId));
+                    if (found) { setViewItem(found); setIsViewModalOpen(true); try { window.history.replaceState({}, document.title, window.location.pathname); } catch (e) {} }
+                }
+            }, [items]);
+            
+            useEffect(() => { setCurrentPage(1); setSelectedItems([]); }, [searchTerm, filterCategory]);
+
+            const fetchDataFromCloud = useCallback(async (silent = false) => {
+                if (!cloudUrl) return;
+                if (!silent) setCloudStatus('loading');
+                try {
+                    const response = await fetch(cloudUrl);
+                    const data = await response.json();
+                    if (data && data.items) {
+                        setItems(prev => JSON.stringify(prev) !== JSON.stringify(data.items) ? data.items : prev);
+                        setLogs(prev => JSON.stringify(prev) !== JSON.stringify(data.logs) ? data.logs : prev);
+                        setBorrowHistory(prev => JSON.stringify(prev) !== JSON.stringify(data.history) ? data.history : prev);
+                        if (!silent) setCloudStatus('success');
+                    }
+                } catch (error) { if (!silent) setCloudStatus('error'); }
+            }, [cloudUrl]);
+
+            useEffect(() => { fetchDataFromCloud(); }, [fetchDataFromCloud]);
+            useEffect(() => { if (!cloudUrl) return; const intervalId = setInterval(() => fetchDataFromCloud(true), 15000); return () => clearInterval(intervalId); }, [cloudUrl, fetchDataFromCloud]);
+
+            const saveDataToCloud = useCallback(async (newItems, newLogs, newHistory) => {
+                localStorage.setItem('simpati_items', JSON.stringify(newItems));
+                localStorage.setItem('simpati_logs', JSON.stringify(newLogs));
+                localStorage.setItem('simpati_history', JSON.stringify(newHistory));
+                if (cloudUrl) {
+                    setCloudStatus('loading');
+                    try {
+                        await fetch(cloudUrl, { method: 'POST', redirect: "follow", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ items: newItems, logs: newLogs, history: newHistory }) });
+                        setCloudStatus('success');
+                    } catch (error) { setCloudStatus('error'); }
+                }
+            }, [cloudUrl]);
+
+            const updateAll = (newItems, newLogs, newHistory) => { setItems(newItems); if(newLogs) setLogs(newLogs); if(newHistory) setBorrowHistory(newHistory); saveDataToCloud(newItems, newLogs || logs, newHistory || borrowHistory); };
+            const addLog = (action, details) => { const newLog = { id: Date.now(), timestamp: new Date().toLocaleString('id-ID'), user: 'Admin', action, details }; updateAll(items, [newLog, ...logs], borrowHistory); };
+
+            const handleShare = async (item) => {
+                const url = `${window.location.origin}${window.location.pathname}?id=${item.id}`;
+                setShareData({ url, name: item.name });
+                try { const dataUrl = await QRCode.toDataURL(url, { width: 200, margin: 2 }); setQrCodeUrl(dataUrl); } catch (err) {}
+                setIsShareModalOpen(true);
+            };
+
+            const handleCopyLink = () => { const input = document.getElementById('shareUrlInput'); if (input) { input.select(); document.execCommand('copy'); alert('Link berhasil disalin!'); } };
+            const downloadQR = async (format) => { const url = shareData.url; try { let dataUrl; let filename = `QRCode_${shareData.name}.${format}`; if (format === 'png') { dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 2, type: 'image/png' }); } else { dataUrl = await QRCode.toDataURL(url, { width: 300, margin: 2, type: 'image/jpeg' }); } const link = document.createElement('a'); link.download = filename; link.href = dataUrl; document.body.appendChild(link); link.click(); document.body.removeChild(link); } catch (err) { alert("Gagal unduh QR"); } };
+            
+            const handleFullScreenChange = () => setIsFullScreen(!!document.fullscreenElement);
+            useEffect(() => { document.addEventListener('fullscreenchange', handleFullScreenChange); return () => document.removeEventListener('fullscreenchange', handleFullScreenChange); }, []);
+            
+            // Fullscreen Function with Fallback
+            const toggleFullScreen = () => {
+                if (!document.fullscreenElement && !isSimulatedFull) {
+                    document.documentElement.requestFullscreen()
+                        .catch((e) => {
+                            console.warn("Fullscreen blocked, falling back:", e);
+                            setIsSimulatedFull(true);
+                        });
+                } else {
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen().catch(e => console.warn(e));
+                    }
+                    if (isSimulatedFull) {
+                        setIsSimulatedFull(false);
+                    }
+                }
+            };
+            
+            // UPDATE: Menambahkan kolom Sub Kategori di Template
+            const handleDownloadTemplate = () => { const csv = "data:text/csv;charset=utf-8," + encodeURIComponent("\uFEFFKode;Nama;Merk;Kategori;Sub Kategori;Tahun;Lokasi;Jumlah;Kondisi;Sumber;Harga\nINV-00X;Contoh;Merk;KIB B;Meja Guru;2024;Gudang;1;Baik;BOS;100000"); const link = document.createElement("a"); link.href = csv; link.download = "template.csv"; document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+            
+            // UPDATE: Menambahkan kolom Sub Kategori di Export Data
+            const handleDownloadData = () => { if(items.length===0) return alert("Kosong"); const header = ["Kode","Nama","Merk","Kategori","Sub Kategori","Tahun","Lokasi","Jumlah","Kondisi","Sumber","Status","Tanggal","Harga"]; const rows = [header.join(';')]; items.forEach(i => rows.push([i.code,i.name,i.brand,i.category,i.subCategory,i.year,i.location,i.quantity,i.condition,i.source,i.status,i.date,i.price].map(t=>String(t||'').replace(/;/g,',')).join(';'))); const csv = "data:text/csv;charset=utf-8," + encodeURIComponent("\uFEFF"+rows.join("\n")); const link = document.createElement("a"); link.href = csv; link.download = "backup.csv"; document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+            
+            // UPDATE: Membaca kolom Sub Kategori saat Import
+            const processRawText = (text) => {
+                if (!text.trim()) return;
+                const lines = text.split(/\r?\n/); const parsed = []; const sep = lines[0].includes('\t') ? '\t' : (lines[0].includes(';') ? ';' : ',');
+                let start = (lines[0].toLowerCase().includes('kode')) ? 1 : 0;
+                for(let i=start; i<lines.length; i++){
+                    const col = lines[i].trim().split(sep);
+                    // Sesuaikan index kolom dengan template baru (Sub Kategori ada di index 4)
+                    if(col.length>=2) parsed.push({ 
+                        id: Date.now()+i+Math.random(), 
+                        date: new Date().toISOString().split('T')[0], 
+                        status: 'Tersedia', 
+                        code: col[0]||'-', 
+                        name: col[1]||'-', 
+                        brand: col[2]||'-', 
+                        category: col[3]||'Lainnya',
+                        subCategory: col[4]||'', // Kolom baru
+                        year: col[5]||'-', 
+                        location: col[6]||'-', 
+                        quantity: parseInt(col[7])||0, 
+                        condition: col[8]||'Baik', 
+                        source: col[9]||'-', 
+                        price: parseInt(col[10])||0 
+                    });
+                }
+                setBulkPreviewData(parsed);
+            };
+            const handleFileUpload = (e) => { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (ev) => processRawText(ev.target.result); r.readAsText(f); };
+            const saveBulkData = () => { if(bulkPreviewData.length===0) return; const newItems = [...bulkPreviewData, ...items]; const newLog = { id: Date.now(), timestamp: new Date().toLocaleString(), user: 'Admin', action: 'Import Massal', details: `Import ${bulkPreviewData.length} item` }; updateAll(newItems, [newLog, ...logs], borrowHistory); setIsBulkModalOpen(false); setBulkPreviewData([]); };
+
+            const handleSaveItem = (e) => { e.preventDefault(); const fd = new FormData(e.target); const d = Object.fromEntries(fd.entries()); d.quantity=parseInt(d.quantity); d.price=parseInt(d.price)||0; if(!d.year) d.year='-'; let ni, ld; if(editingItem){ ni=items.map(i=>i.id===editingItem.id?{...i,...d}:i); ld=`Edit: ${d.name}`; }else{ const n={id:Date.now(), date:new Date().toISOString().split('T')[0], status:'Tersedia', ...d}; ni=[n,...items]; ld=`Tambah: ${d.name}`; } const nl={id:Date.now(), timestamp:new Date().toLocaleString(), user:'Admin', action:editingItem?'Ubah':'Tambah', details:ld}; updateAll(ni, [nl,...logs], borrowHistory); setIsItemModalOpen(false); setEditingItem(null); };
+            
+            const handleSelectAll = (e, list) => { if(e.target.checked) setSelectedItems([...new Set([...selectedItems, ...list.map(i=>i.id)])]); else setSelectedItems(selectedItems.filter(id=>!list.map(i=>i.id).includes(id))); };
+            const handleSelectItem = (id) => setSelectedItems(prev => prev.includes(id) ? prev.filter(i=>i!==id) : [...prev, id]);
+            const handleDeleteClick = (item) => { setItemToDelete(item); setIsBulkDelete(false); setIsDeleteModalOpen(true); };
+            const confirmDelete = () => { let ni=[...items], ld=''; if(isBulkDelete){ if(selectedItems.length===0)return; ni=items.filter(i=>!selectedItems.includes(i.id)); ld=`Hapus Massal ${selectedItems.length}`; setSelectedItems([]); }else{ if(!itemToDelete)return; ni=items.filter(i=>i.id!==itemToDelete.id); ld=`Hapus: ${itemToDelete.name}`; setItemToDelete(null); } const nl={id:Date.now(), timestamp:new Date().toLocaleString(), user:'Admin', action:'Hapus', details:ld}; updateAll(ni, [nl,...logs], borrowHistory); setIsDeleteModalOpen(false); setIsBulkDelete(false); };
+            
+            const handleBorrow = (e) => { e.preventDefault(); const fd = new FormData(e.target); const ni = items.map(i=>i.id===selectedItemForBorrow.id?{...i, status:'Dipinjam'}:i); const tr={id:Date.now(), itemId:selectedItemForBorrow.id, itemName:selectedItemForBorrow.name, itemCode:selectedItemForBorrow.code, borrowerName:fd.get('borrowerName'), unit:fd.get('unit'), borrowDate:new Date().toISOString().split('T')[0], returnDate:fd.get('returnDate'), status:'Dipinjam'}; const nl={id:Date.now(), timestamp:new Date().toLocaleString(), user:'Admin', action:'Pinjam', details:`${fd.get('borrowerName')} pinjam ${selectedItemForBorrow.name}`}; updateAll(ni, [nl,...logs], [tr,...borrowHistory]); setIsBorrowModalOpen(false); };
+            const handleReturn = (hid) => { const h=borrowHistory.find(x=>x.id===hid); if(!h || !confirm('Kembalikan?')) return; const ni=items.map(i=>i.id===h.itemId?{...i, status:'Tersedia'}:i); const nh=borrowHistory.map(x=>x.id===hid?{...x, status:'Dikembalikan', actualReturnDate:new Date().toISOString().split('T')[0]}:x); const nl={id:Date.now(), timestamp:new Date().toLocaleString(), user:'Admin', action:'Kembali', details:`${h.borrowerName} kembalikan ${h.itemName}`}; updateAll(ni, [nl,...logs], nh); };
+            const handleSaveSettings = (e) => { e.preventDefault(); const u=e.target.elements.url.value; setCloudUrl(u); localStorage.setItem('simpati_cloud_url', u); setIsSettingsOpen(false); alert('Disimpan'); };
+
+            // Re-defined handlePaste here to ensure it's available
+            const handlePaste = (e) => { const text = e.target.value; processRawText(text); };
+
+            // --- RENDER ---
+            const stats = useMemo(() => ({ total: items.length, available: items.filter(i => i.status === 'Tersedia').length, borrowed: items.filter(i => i.status === 'Dipinjam').length, damaged: items.filter(i => i.condition.includes('Rusak')).length }), [items]);
+            const filteredItems = items.filter(item => { const term = searchTerm.toLowerCase(); return (item.name.toLowerCase().includes(term) || item.code.toLowerCase().includes(term) || (item.location && item.location.toLowerCase().includes(term))) && (filterCategory === 'All' || item.category === filterCategory); });
+
+            const renderDashboard = () => (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <StatCard title="Total Barang" value={stats.total} icon={Icons.Box} color="blue" subtext="Semua aset terdaftar" />
+                        <StatCard title="Tersedia" value={stats.available} icon={Icons.CheckCircle} color="green" subtext="Siap digunakan" />
+                        <StatCard title="Dipinjam" value={stats.borrowed} icon={Icons.Activity} color="orange" subtext="Sedang diluar" />
+                        <StatCard title="Rusak / Maintenance" value={stats.damaged} icon={Icons.Trash} color="red" subtext="Perlu tindakan" />
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100"><h3 className="font-bold text-slate-700 mb-4">Kondisi Aset</h3><ConditionChart items={items} /></div>
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100"><h3 className="font-bold text-slate-700 mb-4">Distribusi Kategori</h3><CategoryChart items={items} /></div>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100"><h3 className="font-bold text-slate-700 mb-4">Aktivitas Terkini</h3><div className="space-y-4">{logs.slice(0, 5).map(log => (<div key={log.id} className="flex items-start gap-3 p-3 hover:bg-slate-50 rounded-lg transition-colors border-l-4 border-slate-200"><div className="flex-1"><div className="flex justify-between"><p className="font-semibold text-slate-800 text-sm">{log.action}</p><span className="text-xs text-slate-400">{log.timestamp}</span></div><p className="text-sm text-slate-600 mt-1">{log.details}</p></div></div>))}</div></div>
+                </div>
+            );
+
+            const renderInventory = () => {
+                const indexOfLast = currentPage * itemsPerPage; const indexOfFirst = indexOfLast - itemsPerPage; const current = filteredItems.slice(indexOfFirst, indexOfLast); const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+                const isAllSelected = current.length > 0 && current.every(i => selectedItems.includes(i.id));
+                return (
+                    <div className="space-y-4 animate-fade-in">
+                        <div className="flex flex-col md:flex-row justify-between gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                            <div className="flex gap-2 flex-1">
+                                <div className="relative flex-1"><span className="absolute left-3 top-3 text-slate-400"><Icons.Search /></span><input type="text" placeholder="Cari..." className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                                <select className="border border-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}><option value="All">Semua</option><option value="KIB A">KIB A</option><option value="KIB B">KIB B</option><option value="KIR Kelas 7">KIR Kelas 7</option><option value="KIR Kelas 8">KIR Kelas 8</option><option value="KIR Kelas 9">KIR Kelas 9</option><option value="KIR Ruang Lain">KIR Ruang Lain</option></select>
+                            </div>
+                            <div className="flex gap-2">
+                                {userRole==='admin' && selectedItems.length>0 && <button onClick={()=>{setIsBulkDelete(true);setIsDeleteModalOpen(true)}} className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 animate-pulse"><Icons.Trash /> Hapus ({selectedItems.length})</button>}
+                                <button onClick={handleDownloadData} className="bg-slate-600 text-white px-4 py-2 rounded-lg"><Icons.Download /></button>
+                                {userRole==='admin' && <><button onClick={()=>{setBulkPreviewData([]);setIsBulkModalOpen(true)}} className="bg-emerald-600 text-white px-4 py-2 rounded-lg"><Icons.Upload /></button><button onClick={()=>{setEditingItem(null);setIsItemModalOpen(true)}} className="bg-blue-600 text-white px-6 py-2 rounded-lg"><Icons.Plus /></button></>}
+                            </div>
+                        </div>
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-xs"><tr>{userRole==='admin' && <th className="px-6 py-4 w-4"><input type="checkbox" checked={isAllSelected} onChange={(e)=>handleSelectAll(e, current)} className="w-4 h-4"/></th>}<th className="px-6 py-4">Barang</th><th className="px-6 py-4">Kategori</th><th className="px-6 py-4">Lokasi</th><th className="px-6 py-4">Harga</th><th className="px-6 py-4 text-center">Thn</th><th className="px-6 py-4">Kondisi</th><th className="px-6 py-4 text-center">Status</th><th className="px-6 py-4 text-center">Jml</th><th className="px-6 py-4 text-right">Aksi</th></tr></thead>
+                        <tbody className="divide-y divide-slate-100">{current.map(i => (<tr key={i.id} className={`hover:bg-slate-50 ${selectedItems.includes(i.id)?'bg-blue-50':''}`}>{userRole==='admin' && <td className="px-6 py-4"><input type="checkbox" checked={selectedItems.includes(i.id)} onChange={()=>handleSelectItem(i.id)} className="w-4 h-4"/></td>}<td className="px-6 py-4"><div>{i.name}</div><div className="text-xs text-slate-500">{i.code}</div></td><td className="px-6 py-4">{i.category}</td><td className="px-6 py-4">{i.location}</td><td className="px-6 py-4">{formatRupiah(i.price)}</td><td className="px-6 py-4 text-center">{i.year}</td><td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-medium ${i.condition==='Baik'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{i.condition}</span></td><td className="px-6 py-4 text-center"><span className="bg-blue-50 text-blue-600 px-2 py-1 rounded-full text-xs">{i.status}</span></td><td className="px-6 py-4 text-center">{i.quantity}</td><td className="px-6 py-4"><div className="flex justify-end gap-2"><button onClick={()=>handleShare(i)} className="p-1.5 hover:bg-slate-100 text-slate-600"><Icons.Share /></button>{userRole==='admin' && <><button onClick={()=>{setSelectedItemForBorrow(i);setIsBorrowModalOpen(true)}} className="p-1.5 hover:bg-blue-100 text-blue-600"><Icons.Clipboard /></button><button onClick={()=>{setEditingItem(i);setIsItemModalOpen(true)}} className="p-1.5 hover:bg-yellow-100 text-yellow-600"><Icons.Edit /></button><button onClick={()=>handleDeleteClick(i)} className="p-1.5 hover:bg-red-100 text-red-600"><Icons.Trash /></button></>}</div></td></tr>))}</tbody></table></div></div>
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                            <div className="flex items-center gap-2 text-sm text-slate-600"><span>Show</span><select value={itemsPerPage} onChange={(e)=>setItemsPerPage(Number(e.target.value))} className="border rounded px-2 py-1"><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option></select></div>
+                            <div className="flex gap-1"><button onClick={()=>setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1} className="px-3 py-1 border rounded disabled:opacity-50">Prev</button><span className="px-3 py-1">Page {currentPage} of {totalPages}</span><button onClick={()=>setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages} className="px-3 py-1 border rounded disabled:opacity-50">Next</button></div>
+                        </div>
+                    </div>
+                );
+            };
+
+            const renderBorrowing = () => (<div className="space-y-4 animate-fade-in"><div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-xs"><tr><th className="px-6 py-4">Barang</th><th className="px-6 py-4">Peminjam</th><th className="px-6 py-4">Tgl Pinjam</th><th className="px-6 py-4">Tgl Kembali</th><th className="px-6 py-4">Status</th><th className="px-6 py-4 text-right">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{borrowHistory.map(h => (<tr key={h.id}><td className="px-6 py-4"><div>{h.itemName}</div><div className="text-xs text-slate-400">{h.itemCode}</div></td><td className="px-6 py-4"><div>{h.borrowerName}</div><div className="text-xs text-slate-400">{h.unit}</div></td><td className="px-6 py-4">{h.borrowDate}</td><td className="px-6 py-4">{h.returnDate}</td><td className="px-6 py-4"><span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs">{h.status}</span></td><td className="px-6 py-4 text-right">{userRole==='admin' && h.status==='Dipinjam' && <button onClick={()=>handleReturn(h.id)} className="bg-emerald-600 text-white text-xs px-3 py-1 rounded">Kembalikan</button>}</td></tr>))}</tbody></table></div></div></div>);
+            const renderAudit = () => (<div className="space-y-4 animate-fade-in"><div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-xs"><tr><th className="px-6 py-4">Waktu</th><th className="px-6 py-4">User</th><th className="px-6 py-4">Aksi</th><th className="px-6 py-4">Detail</th></tr></thead><tbody className="divide-y divide-slate-100">{logs.map(l => (<tr key={l.id}><td className="px-6 py-4 text-xs font-mono">{l.timestamp}</td><td className="px-6 py-4">{l.user}</td><td className="px-6 py-4"><span className="bg-gray-100 px-2 py-1 rounded text-xs">{l.action}</span></td><td className="px-6 py-4 text-slate-600">{l.details}</td></tr>))}</tbody></table></div></div></div>);
+
+            return (
+                <div className={`min-h-screen flex flex-col md:flex-row font-sans ${isSimulatedFull ? 'fixed inset-0 z-[100] bg-white' : ''}`}>
+                    <nav className="md:w-64 bg-slate-900 text-slate-300 flex flex-col justify-between fixed md:relative bottom-0 w-full z-40 md:h-screen">
+                        <div className="p-6 hidden md:block"><div className="flex items-center gap-3 mb-8 text-white"><div className="bg-blue-600 p-2 rounded-lg"><Icons.Grid /></div><div><h1 className="text-lg font-bold tracking-tight leading-none">SIMPATI SPANSA</h1><p className="text-[10px] text-slate-400 font-medium tracking-wide mt-0.5">SMPN 1 B. LAMPUNG</p></div></div><div className="space-y-2"><button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === 'dashboard' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}><Icons.Grid /> Dashboard</button><button onClick={() => setView('inventory')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === 'inventory' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}><Icons.List /> Data Barang</button><button onClick={() => setView('borrowing')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === 'borrowing' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}><Icons.Clipboard /> Peminjaman</button>{userRole === 'admin' && <button onClick={() => setView('audit')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${view === 'audit' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' : 'hover:bg-slate-800'}`}><Icons.History /> Audit Trail</button>}</div></div>
+                        <div className="md:hidden flex justify-around bg-slate-900 p-4 border-t border-slate-800"><button onClick={() => setView('dashboard')} className="text-blue-500 flex flex-col items-center"><Icons.Grid /><span className="text-[10px]">Home</span></button><button onClick={() => setView('inventory')} className="text-slate-400 flex flex-col items-center"><Icons.List /><span className="text-[10px]">Barang</span></button></div>
+                        <div className="p-6 hidden md:block">
+                            <div className="bg-slate-800 rounded-xl p-4">
+                                <p className="text-xs text-slate-400 mb-1">Login sebagai</p>
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <div className="bg-slate-700 p-1 rounded-full"><Icons.User /></div>
+                                        <p className="font-bold text-white capitalize">{userRole}</p>
+                                    </div>
+                                    <button onClick={toggleRole} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded">Ganti</button>
+                                </div>
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-4 text-center">
+                                <p>© 2026 smpn1bbdl. Semua Hak Dilindungi.</p>
+                                <p className="mt-1 opacity-70">Design by : Noviyalpg</p>
+                            </div>
+                        </div>
+                    </nav>
+                    <main className="flex-1 bg-slate-50 overflow-y-auto h-screen pb-20 md:pb-0">
+                        <header className="bg-white border-b border-slate-200 px-4 py-4 flex justify-between items-center sticky top-0 z-30">
+                            <div><h2 className="text-xl font-bold text-slate-800 capitalize">{view}</h2><p className="text-xs text-slate-500">Sistem Manajemen Pendataan Inventaris</p></div>
+                            <div className="flex items-center gap-2">
+                                <button onClick={toggleRole} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100"><Icons.User /> {userRole}</button>
+                                <div className="flex items-center" title={cloudUrl ? "Sync On" : "Offline"}>{cloudStatus === 'loading' ? <div className="spinner text-blue-500 border-blue-200"></div> : (!cloudUrl ? <span className="text-slate-400"><Icons.CloudOff /></span> : <span className="text-emerald-500"><Icons.Check /></span>)}</div>
+                                {userRole==='admin' && <button onClick={()=>setIsSettingsOpen(true)} className="p-2"><Icons.Settings /></button>}
+                                <button onClick={toggleFullScreen} className="p-2"><Icons.Maximize /></button>
+                            </div>
+                        </header>
+                        <div className="p-4 md:p-8 max-w-7xl mx-auto">{view==='dashboard'?renderDashboard():view==='inventory'?renderInventory():view==='borrowing'?renderBorrowing():renderAudit()}</div>
+                    </main>
+
+                    <Modal isOpen={isSettingsOpen} onClose={()=>setIsSettingsOpen(false)} title="Pengaturan Cloud">
+                        <form onSubmit={handleSaveSettings}><input name="url" defaultValue={cloudUrl} className="w-full border p-2 rounded" /><button className="bg-blue-600 text-white px-4 py-2 rounded mt-2 w-full">Simpan</button></form>
+                    </Modal>
+                    <Modal isOpen={isLoginModalOpen} onClose={()=>setIsLoginModalOpen(false)} title="Login Admin">
+                        <form onSubmit={handleLogin}><input type="password" name="password" className="w-full border p-2 rounded mb-4" placeholder="Password..." autoFocus /><button className="bg-blue-600 text-white px-4 py-2 rounded w-full">Masuk</button></form>
+                    </Modal>
+                    <Modal isOpen={isDeleteModalOpen} onClose={()=>setIsDeleteModalOpen(false)} title="Hapus?">
+                        <div className="text-center"><p className="mb-4">Yakin ingin menghapus?</p><div className="flex gap-2"><button onClick={()=>setIsDeleteModalOpen(false)} className="flex-1 border p-2 rounded">Batal</button><button onClick={confirmDelete} className="flex-1 bg-red-600 text-white p-2 rounded">Ya, Hapus</button></div></div>
+                    </Modal>
+                    <Modal isOpen={isShareModalOpen} onClose={()=>setIsShareModalOpen(false)} title="Bagikan">
+                        <div className="flex flex-col items-center gap-4">{qrCodeUrl && <img src={qrCodeUrl} className="w-48" />}<div className="flex gap-2"><button onClick={()=>downloadQR('png')} className="bg-slate-100 px-3 py-1 rounded text-xs">PNG</button><button onClick={()=>downloadQR('jpeg')} className="bg-slate-100 px-3 py-1 rounded text-xs">JPEG</button></div><div className="flex w-full gap-2"><input id="shareUrlInput" readOnly value={shareData.url} className="border p-2 flex-1 rounded text-xs" /><button onClick={handleCopyLink} className="bg-blue-600 text-white px-3 py-1 rounded text-xs">Copy</button></div></div>
+                    </Modal>
+                    <Modal isOpen={isItemModalOpen} onClose={()=>setIsItemModalOpen(false)} title={editingItem?"Edit":"Tambah"}>
+                        <form onSubmit={handleSaveItem} className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4"><input name="code" defaultValue={editingItem?.code} placeholder="Kode" className="border p-2 rounded" required /><input name="year" defaultValue={editingItem?.year} placeholder="Tahun" className="border p-2 rounded" /></div>
+                            <input name="name" defaultValue={editingItem?.name} placeholder="Nama Barang" className="border p-2 rounded w-full" required />
+                            <div className="grid grid-cols-2 gap-4"><input name="brand" defaultValue={editingItem?.brand} placeholder="Merk" className="border p-2 rounded" /><input name="quantity" defaultValue={editingItem?.quantity} type="number" placeholder="Jml" className="border p-2 rounded" required /></div>
+                            
+                            {/* UPDATE: Layout Grid untuk Kategori dan Sub Kategori */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <select name="category" defaultValue={editingItem?.category||'KIB B'} className="border p-2 rounded"><option>KIB A</option><option>KIB B</option><option>KIR Kelas 7</option><option>KIR Kelas 8</option><option>KIR Kelas 9</option><option>KIR Ruang Lain</option></select>
+                                <input name="subCategory" defaultValue={editingItem?.subCategory} placeholder="Sub Kategori (Opsional)" className="border p-2 rounded" />
+                            </div>
+                            
+                            <select name="condition" defaultValue={editingItem?.condition||'Baik'} className="border p-2 rounded w-full"><option>Baik</option><option>Rusak Ringan</option><option>Rusak Berat</option></select>
+
+                            <div className="grid grid-cols-2 gap-4"><input name="location" defaultValue={editingItem?.location} placeholder="Lokasi" className="border p-2 rounded" /><input name="price" defaultValue={editingItem?.price} type="number" placeholder="Harga" className="border p-2 rounded" /></div>
+                            <select name="source" defaultValue={editingItem?.source||'Dana BOS'} className="border p-2 rounded w-full"><option>Dana BOS</option><option>Dana Komite</option><option>Hibah</option><option>Lainnya</option></select>
+                            <button className="bg-blue-600 text-white p-2 rounded w-full">Simpan</button>
+                        </form>
+                    </Modal>
+                    <Modal isOpen={isBulkModalOpen} onClose={()=>setIsBulkModalOpen(false)} title="Import">
+                        <div className="space-y-4"><div className="flex justify-between"><p className="text-sm">Copy-Paste dari Excel (tanpa header)</p><button onClick={handleDownloadTemplate} className="text-xs bg-slate-100 px-2 py-1 rounded">Template</button></div><textarea onChange={handlePaste} className="w-full h-32 border p-2 rounded text-xs" placeholder="Kode | Nama | Merk..."></textarea><div className="text-center text-xs text-slate-400">- ATAU -</div><input type="file" onChange={handleFileUpload} className="text-xs" />{bulkPreviewData.length>0 && <div className="border-t pt-2"><p className="text-xs text-emerald-600 font-bold">{bulkPreviewData.length} data siap.</p><button onClick={saveBulkData} className="bg-emerald-600 text-white w-full py-2 rounded mt-2 text-sm">Simpan Semua</button></div>}</div>
+                    </Modal>
+                    <Modal isOpen={isViewModalOpen} onClose={()=>setIsViewModalOpen(false)} title="Detail">
+                        <div className="space-y-2">
+                            {viewItem && (
+                                <>
+                                    <p><strong>{viewItem.name}</strong> ({viewItem.code})</p>
+                                    <div className="grid grid-cols-2 text-sm text-slate-600 gap-2 mb-2">
+                                        <div><span className="block text-xs text-slate-400">Kategori</span>{viewItem.category}</div>
+                                        <div><span className="block text-xs text-slate-400">Sub Kategori</span>{viewItem.subCategory || '-'}</div>
+                                    </div>
+                                    <p>Lokasi: {viewItem.location}</p>
+                                    <p>Kondisi: {viewItem.condition}</p>
+                                    <p>Harga: {formatRupiah(viewItem.price)}</p>
+                                    <button onClick={()=>setIsViewModalOpen(false)} className="w-full border p-2 rounded mt-4">Tutup</button>
+                                </>
+                            )}
+                        </div>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
